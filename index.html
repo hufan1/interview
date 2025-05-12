@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>内容区瀑布流</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fafafa;
+      font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+    .content-area {
+      width: 100vw;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 10px 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 10px;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .column {
+      width: 50%;
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 8px;
+    }
+    .card-media {
+      width: 100%;
+      aspect-ratio: 1/1;
+      object-fit: cover;
+      background: #eee;
+      display: block;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: bold;
+      margin: 10px 10px 4px 10px;
+      color: #222;
+      line-height: 1.2;
+    }
+    .card-tags {
+      margin: 0 10px 4px 10px;
+      color: #888;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .card-tags span {
+      background: #f3f3f3;
+      border-radius: 6px;
+      padding: 2px 6px;
+      margin-right: 4px;
+    }
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 10px;
+      margin-top: 6px;
+    }
+    .card-user {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #ddd;
+    }
+    .card-username {
+      font-size: 13px;
+      color: #666;
+    }
+    .card-like {
+      display: flex;
+      align-items: center;
+      color: #888;
+      font-size: 13px;
+      gap: 2px;
+    }
+    .card-like::before {
+      content: "👍";
+      font-size: 14px;
+      margin-right: 2px;
+    }
+    .refresh-tip, .load-tip {
+      text-align: center;
+      color: #888;
+      font-size: 14px;
+      margin: 10px 0;
+    }
+    @media (max-width: 500px) {
+      .content-area {
+        max-width: 100vw;
+        padding: 0;
+        gap: 4px;
+      }
+      .column {
+        width: 50%;
+        flex: none;
+      }
+      .card {
+        border-radius: 8px;
+      }
+      .card-title, .card-tags, .card-footer {
+        margin-left: 6px;
+        margin-right: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="refreshTip" class="refresh-tip" style="display:none;">正在刷新...</div>
+  <div class="content-area" id="contentArea">
+    <div class="column" id="col1"></div>
+    <div class="column" id="col2"></div>
+  </div>
+  <div id="loadTip" class="load-tip" style="display:none;">加载中...</div>
+  <script>
+    // 随机mock数据生成
+    const randomWords = ["梦幻", "小家", "冒险", "日常", "生活", "游戏", "视频", "推荐", "技巧", "合集", "新版本", "地图", "活动", "玩家", "宠物", "升级", "操作", "精彩", "分享", "热门", "趣味"];
+    function randomTitle() {
+      let len = Math.floor(Math.random() * 6) + 5;
+      let arr = [];
+      for(let i=0;i<len;i++) arr.push(randomWords[Math.floor(Math.random()*randomWords.length)]);
+      return arr.join("") + (Math.random()<0.5 ? "#"+randomWords[Math.floor(Math.random()*randomWords.length)] : "");
+    }
+    function randomTags() {
+      let n = Math.floor(Math.random()*2)+1;
+      let arr = [];
+      for(let i=0;i<n;i++) arr.push(randomWords[Math.floor(Math.random()*randomWords.length)]);
+      return arr;
+    }
+    function randomUser() {
+      const names = ["小明", "小红", "阿新", "小梦", "小鱼", "小雨", "阿强", "小刚", "小美", "小乐"];
+      return {
+        name: names[Math.floor(Math.random()*names.length)],
+        avatar: `https://randomuser.me/api/portraits/${Math.random()<0.5?'men':'women'}/${Math.floor(Math.random()*80)}.jpg`
+      };
+    }
+    function randomInt(a, b) {
+      return a + Math.floor(Math.random() * (b - a + 1));
+    }
+    function randomImg(h) {
+      return `https://picsum.photos/seed/${Math.random().toString(36).slice(2)}/400/${h}`;
+    }
+    function randomVideo() {
+      return "https://www.w3schools.com/html/mov_bbb.mp4";
+    }
+    function randomCard() {
+      const isVideo = Math.random() < 0.3;
+      const height = randomInt(100, 500);
+      return {
+        title: randomTitle(),
+        tags: randomTags(),
+        type: isVideo ? 'video' : 'img',
+        src: isVideo ? randomVideo() : randomImg(height),
+        user: randomUser(),
+        like: randomInt(10, 999),
+        height: height
+      };
+    }
+    // 瀑布流渲染
+    let col1 = document.getElementById('col1');
+    let col2 = document.getElementById('col2');
+    function renderCards(cards, clear=false) {
+      if (clear) {
+        col1.innerHTML = '';
+        col2.innerHTML = '';
+      }
+      cards.forEach(card => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        // 随机高度模拟错落
+        let extraHeight = randomInt(0, 40);
+        div.style.marginBottom = extraHeight + "px";
+        let mediaHtml = card.type === 'img'
+          ? `<img class="card-media" src="${card.src}" alt="图片" style="height:${card.height}px;max-height:500px;width:100%;object-fit:cover;">`
+          : `<video class="card-media" src="${card.src}" controls preload="none" style="height:${card.height}px;max-height:500px;width:100%;object-fit:cover;"></video>`;
+        div.innerHTML = `
+          ${mediaHtml}
+          <div class="card-title">${card.title}</div>
+          <div class="card-tags">${card.tags.map(t=>`<span>${t}</span>`).join('')}</div>
+          <div class="card-footer">
+            <div class="card-user">
+              <img class="card-avatar" src="${card.user.avatar}" alt="头像">
+              <span class="card-username">${card.user.name}</span>
+            </div>
+            <div class="card-like">${card.like}</div>
+          </div>
+        `;
+        // 交错分配到两列
+        if (col1.scrollHeight <= col2.scrollHeight) {
+          col1.appendChild(div);
+        } else {
+          col2.appendChild(div);
+        }
+      });
+    }
+    // 加载数据
+    function loadMore(count=6) {
+      let cards = [];
+      for (let i = 0; i < count; i++) {
+        cards.push(randomCard());
+      }
+      renderCards(cards);
+    }
+    // 下拉刷新
+    let isRefreshing = false;
+    let startY = 0;
+    let refreshTip = document.getElementById('refreshTip');
+    document.body.addEventListener('touchstart', e => {
+      if (window.scrollY === 0) {
+        startY = e.touches[0].clientY;
+      }
+    });
+    document.body.addEventListener('touchmove', e => {
+      if (window.scrollY === 0 && e.touches[0].clientY - startY > 60 && !isRefreshing) {
+        refreshTip.style.display = 'block';
+        isRefreshing = true;
+        setTimeout(() => {
+          renderCards(Array.from({length:8}, randomCard), true);
+          refreshTip.style.display = 'none';
+          isRefreshing = false;
+        }, 1000);
+      }
+    });
+    // 上拉加载
+    let isLoading = false;
+    let loadTip = document.getElementById('loadTip');
+    window.addEventListener('scroll', () => {
+      if (isLoading) return;
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+        isLoading = true;
+        loadTip.style.display = 'block';
+        setTimeout(() => {
+          loadMore();
+          loadTip.style.display = 'none';
+          isLoading = false;
+        }, 1000);
+      }
+    });
+    // 初始化
+    renderCards(Array.from({length:10}, randomCard), true);
+  </script>
+</body>
+</html>
